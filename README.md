@@ -1,74 +1,102 @@
-# Generalized Intersection over Union - PyTorch Faster/Mask R-CNN
 
-Faster/Mask R-CNN with GIoU loss implemented in PyTorch
-
-If you use this work, please consider citing:
-
+1- clone the repo
 ```
-@article{Rezatofighi_2018_CVPR,
-  author    = {Rezatofighi, Hamid and Tsoi, Nathan and Gwak, JunYoung and Sadeghian, Amir and Reid, Ian and Savarese, Silvio},
-  title     = {Generalized Intersection over Union},
-  booktitle = {The IEEE Conference on Computer Vision and Pattern Recognition (CVPR)},
-  month     = {June},
-  year      = {2019},
-}
+git clone https://github.com/luiszeni/giou_faster_rcnn.git && cd giou_faster_rcnn
 ```
 
-## Modifications in this repository
-
-This repository is a fork of [roytseng-tw/Detectron.pytorch](https://github.com/roytseng-tw/Detectron.pytorch), with an implementation of GIoU and IoU loss while keeping the code as close to the original as possible. It is also possible to train the network with SmoothL1 loss as in the original code. See the options below.
-
-### Losses
-
-The type of bounding box loss can be configured in the configuration file as following. `MODEL.LOSS_TYPE` configures the final bounding box refinement loss. `MODEL.RPN_LOSS_TYPE` determines the type of the RPN bounding box loss. The valid options are currently: `[iou|giou|sl1]`.
-
+2-create the dir to extract the dataset
 ```
-MODEL:
-  LOSS_TYPE: 'iou'
-  RPN_LOSS_TYPE: 'iou'
+mkdir data
+mkdir data/coco
+cd data/coco 
 ```
 
-Please take a look at `compute_iou` function of [lib/utils/net.py](lib/utils/net.py) for our GIoU and IoU loss implementation in PyTorch.
-
-### Normalizers
-
-We also implement a normalizer of bounding box refinement losses. This can be specified with the `MODEL.LOSS_BBOX_WEIGHT` and `MODEL.RPN_LOSS_BBOX_WEIGHT` parameters in the configuration file. The default value is `1.0`. We use `MODEL.LOSS_BBOX_WEIGHT` of `10.` for IoU and GIoU experiments in the paper.
-
+3-download the coco data from the site
 ```
-MODEL:
-  LOSS_BBOX_WEIGHT: 10.
-  RPN_LOSS_BBOX_WEIGHT: 1.
+wget http://images.cocodataset.org/zips/train2017.zip
+wget http://images.cocodataset.org/zips/val2017.zip
+wget http://images.cocodataset.org/annotations/annotations_trainval2017.zip
 ```
 
-### Network Configurations
-
-We add sample configuration files used for our experiment in `config/baselines`. Our experiments in the paper are based on `e2e_faster_rcnn_R-50-FPN_1x.yaml` and `e2e_mask_rcnn_R-50-FPN_1x.yaml` as following:
-
+4-extract coco data
 ```
-e2e_faster_rcnn_R-50-FPN_giou_1x.yaml  # Faster R-CNN + GIoU loss
-e2e_faster_rcnn_R-50-FPN_iou_1x.yaml   # Faster R-CNN + IoU loss
-e2e_mask_rcnn_R-50-FPN_giou_1x.yaml    # Mask R-CNN + GIoU loss
-e2e_mask_rcnn_R-50-FPN_iou_1x.yaml     # Mask R-CNN + IoU loss
+unzip train2017.zip
+unzip val2017.zip
+unzip annotations_trainval2017.zip
 ```
 
-## Train and evaluation commands
-
-For detailed installation instruction and network training options, please take a look at the README file or issue of [roytseng-tw/Detectron.pytorch](https://github.com/roytseng-tw/Detectron.pytorch). Following is a sample command we used for training and testing Faster R-CNN with GIoU.
-
+5-create the images folder and move the images to it
 ```
-python tools/train_net_step.py --dataset coco2017 --cfg configs/baselines/e2e_faster_rcnn_R-50-FPN_giou_1x.yaml --use_tfboard
+mkdir images
+mv train2017 images
+mv val2017 images
+```
+
+It will have the following structure
+  ```
+  coco
+  ├── annotations
+  |   ├── instances_minival2014.json
+  │   ├── instances_train2014.json
+  │   ├── instances_train2017.json
+  │   ├── instances_val2014.json
+  │   ├── instances_val2017.json
+  │   ├── instances_valminusminival2014.json
+  │   ├── ...
+  |
+  └── images
+      ├── train2014
+      ├── train2017
+      ├── val2014
+      ├──val2017
+      ├── ...
+  ```
+
+6-returns to root directory
+```
+cd ../..
+```
+
+7-get pretrained model
+```
+mkdir data/pretrained_model
+cd data/pretrained_model
+wget http://inf.ufrgs.br/~lfazeni/resnet50_caffe.pth
+```
+
+8-returns to root directory
+```
+cd ../..
+```
+
+
+9-build the docker machine
+```
+cd docker
+docker build . -t giou
+cd ..
+```
+
+10-create a container
+```
+docker run --gpus all -v  $(pwd):/root/giou_faster_rcnn --shm-size 12G -ti --name giou giou
+```
+
+
+11- Build the project inside the docker machine
+```
+cd lib
+sh make.sh
+cd ..
+```
+
+
+12- put the model to train
+```
+python3 tools/train_net_step.py --dataset coco2017 --cfg configs/baselines/e2e_faster_rcnn_R-50-FPN_giou_1x.yaml 
+```
+
+13- after training run the test script (you should update the {full_path_of_the_trained_weight} with the real path)
+```
 python tools/test_net.py --dataset coco2017 --cfg configs/baselines/e2e_faster_rcnn_R-50-FPN_giou_1x.yaml --load_ckpt {full_path_of_the_trained_weight}
 ```
-
-## Pretrained weights
-
-Here are the trained models using the configurations in this repository.
-
- - [Faster RCNN + SmoothL1](https://giou.stanford.edu/rcnn_weights/faster_sl1.pth)
- - [Faster RCNN + IoU](https://giou.stanford.edu/rcnn_weights/faster_iou.pth)
- - [Faster RCNN + RPN IoU loss + IoU](https://giou.stanford.edu/rcnn_weights/faster_rpn_iou.pth)
- - [Faster RCNN + GIoU](https://giou.stanford.edu/rcnn_weights/faster_giou.pth)
- - [Faster RCNN + RPN GIoU loss + GIoU](https://giou.stanford.edu/rcnn_weights/faster_rpn_giou.pth)
- - [Mask RCNN + SmoothL1](https://giou.stanford.edu/rcnn_weights/mask_sl1.pth)
- - [Mask RCNN + IoU](https://giou.stanford.edu/rcnn_weights/mask_iou.pth)
- - [Mask RCNN + GIoU](https://giou.stanford.edu/rcnn_weights/mask_giou.pth)
